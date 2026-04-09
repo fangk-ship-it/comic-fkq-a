@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>臺漫灶腳 - Taiwanese Comic Kitchen</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #F5F2E9;
+            user-select: none;
+            overflow: hidden;
+        }
+
+        .comic-border { border: 6px solid black; }
+        .comic-shadow { box-shadow: 12px 12px 0px 0px black; }
+        .bg-comic-dots {
+            background-image: radial-gradient(#d1d5db 1.5px, transparent 1.5px);
+            background-size: 24px 24px;
+        }
+
+        /* 煙霧粒子動畫 */
+        @keyframes smoke-float {
+            0% { transform: translateY(0) scale(1) rotate(0deg); opacity: 0.8; }
+            100% { transform: translateY(-300px) scale(3) rotate(45deg); opacity: 0; }
+        }
+        .smoke-particle {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            filter: blur(15px);
+            pointer-events: none;
+            z-index: 190;
+        }
+
+        /* 圖卡登場動畫 */
+        @keyframes card-pop {
+            0% { transform: scale(0.5) translateY(100px); opacity: 0; }
+            60% { transform: scale(1.05) translateY(-10px); opacity: 1; }
+            100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+        .animate-card-pop { animation: card-pop 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+        @keyframes ping-once {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
+        .onomatopoeia {
+            position: fixed;
+            pointer-events: none;
+            z-index: 300;
+            animation: ping-once 0.6s ease-out forwards;
+            font-weight: 900;
+            -webkit-text-stroke: 2px black;
+            color: white;
+            font-size: 3rem;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container" class="h-screen w-full flex flex-col relative overflow-hidden">
+        
+        <!-- 入口畫面 -->
+        <div id="scene-intro" class="h-full flex flex-col items-center justify-center space-y-10 p-6 bg-comic-dots">
+            <div class="comic-border p-12 bg-white comic-shadow text-center rotate-1">
+                <h1 class="text-7xl font-black italic tracking-tighter mb-2">臺漫灶腳</h1>
+                <p class="text-xl font-bold text-stone-400 tracking-[0.4em]">COMIC COOKING</p>
+            </div>
+            <button onclick="changeScene('shelf')" class="relative group">
+                <div class="absolute inset-0 bg-black translate-x-2 translate-y-2"></div>
+                <div class="relative border-4 border-black px-16 py-5 bg-[#B22222] text-white text-4xl font-black hover:-translate-y-1 active:translate-y-1 transition-all">開火動手做</div>
+            </button>
+        </div>
+
+        <!-- 書架畫面 -->
+        <div id="scene-shelf" class="hidden min-h-screen bg-[#1A0F0D] p-8 overflow-y-auto">
+            <div class="max-w-4xl mx-auto pb-10">
+                <header class="flex justify-between items-end mb-12 border-b-4 border-white/5 pb-6">
+                    <h2 class="text-white text-7xl font-black italic tracking-tighter">記憶書櫃</h2>
+                    <button onclick="changeScene('intro')" class="bg-white border-4 border-black px-6 py-2 font-black">離開</button>
+                </header>
+                <div id="food-list" class="grid grid-cols-1 sm:grid-cols-2 gap-10"></div>
+            </div>
+        </div>
+
+        <!-- 廚房互動畫面 -->
+        <div id="scene-kitchen" class="hidden h-full flex flex-col relative touch-none bg-comic-dots">
+            <div class="bg-black text-white p-4 flex justify-between items-center z-[110]">
+                <button onclick="changeScene('shelf')" class="font-bold">← 返回</button>
+                <div class="text-center">
+                    <span id="kitchen-step-count" class="text-[10px] block opacity-40">STEP 1</span>
+                    <span id="kitchen-step-name" class="text-xl font-black italic leading-none">載入中</span>
+                </div>
+                <div class="w-24 bg-gray-800 h-3 border border-white overflow-hidden">
+                    <div id="step-progress-fill" class="bg-red-600 h-full w-0 transition-all"></div>
+                </div>
+            </div>
+
+            <div class="flex-1 relative flex flex-col items-center justify-center p-6">
+                <div id="interaction-frame" class="relative w-full max-w-lg aspect-square flex items-center justify-center">
+                    <div class="absolute inset-0 bg-white comic-border shadow-[16px_16px_0px_0px_black] rounded-md"></div>
+                    <div id="step-visual-content" class="z-10 w-full h-full p-6 flex flex-col items-center justify-center"></div>
+                </div>
+                <div class="mt-8 bg-white border-4 border-black p-4 w-full max-w-sm comic-shadow">
+                    <p id="step-instruction" class="text-xl font-black text-center italic"></p>
+                </div>
+            </div>
+
+            <div id="smoke-container" class="fixed inset-0 pointer-events-none z-[190] overflow-hidden"></div>
+
+            <!-- 成品結算 Overlay -->
+            <div id="result-overlay" class="hidden absolute inset-0 z-[200] flex items-center justify-center p-4">
+                <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+                
+                <div id="result-card" class="relative z-[210] bg-white border-[8px] border-black p-4 max-w-sm w-full comic-shadow opacity-0">
+                    <div class="relative mb-4">
+                        <img id="result-img" src="" class="w-full aspect-video border-4 border-black object-cover">
+                        <div class="absolute -bottom-4 -right-2 bg-yellow-400 border-4 border-black px-3 py-1 font-black italic rotate-3">美味出爐！</div>
+                    </div>
+                    
+                    <h3 id="result-title" class="text-4xl font-black italic mb-1"></h3>
+                    <p id="result-source" class="text-xs font-bold text-red-600 mb-2"></p>
+                    <p id="result-culture" class="text-sm font-bold text-stone-500 mb-6 leading-relaxed"></p>
+                    
+                    <div class="space-y-3">
+                        <a id="comic-link" href="#" target="_blank" class="flex items-center justify-center w-full bg-black text-white py-4 font-black text-lg hover:bg-stone-800 transition-colors">
+                            📖 閱讀漫畫原作
+                        </a>
+                        <button onclick="changeScene('shelf')" class="w-full border-4 border-black py-3 font-black text-stone-400 hover:text-black transition-colors">
+                            收進櫃子
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const COMIC_LINKS = {
+            '《手路菜》': 'https://www.creative-comic.tw/zh/book/300/content',
+            '《台灣特有種》': 'https://www.creative-comic.tw/en/book/137/content',
+            '《異人茶跡》': 'https://www.creative-comic.tw/zh/book/161/content',
+            '《友繪的小梅屋記事簿》': 'https://www.creative-comic.tw/zh/book/129/content',
+            '《幸福調味料》': null
+        };
+
+        const FOOD_DATABASE = [
+            {
+                id: 'melon-pork', name: '瓜仔肉', source: '《手路菜》',
+                culture: '台式家常的靈魂：鹹甜適中的醬瓜剁碎入肉，是考驗比例與刀工的經典。',
+                steps: [{ id: 'chop', name: '快刀剁碎', instruction: '🔪 快速左右劃過模擬剁碎！', interactionType: 'slash', target: 20, onom: '叩！', visual: '🥒' }],
+                photoUrl: 'uploaded:ee97726bc1471757.webp'
+            },
+            {
+                id: 'shui-ban', name: '客家水粄', source: '《手路菜》',
+                culture: '純粹的米食藝術：不管是鹹是甜，水粄承載了客家庄對米食製作的極致堅持。',
+                steps: [{ id: 'grind', name: '石磨磨漿', instruction: '🌀 順時針轉圈滑動磨出細緻米漿', interactionType: 'circle', target: 25, onom: '咕嚕', visual: '⚪' }],
+                photoUrl: 'uploaded:ee97726bc1471757.webp'
+            },
+            {
+                id: 'aiyu', name: '愛玉', source: '《友繪的小梅屋記事簿》',
+                culture: '世界唯一：台灣特有的天然果凍。友繪在小梅屋中接觸到的這份清涼，是揉搓愛玉籽釋出果膠的魔法。',
+                steps: [{ id: 'wash', name: '手洗愛玉', instruction: '🌀 順時針揉搓愛玉籽', interactionType: 'circle', target: 25, onom: '滑—', visual: '🍋' }],
+                photoUrl: 'uploaded:Gemini_Generated_Image_dbtvo1dbtvo1dbtv.jpg'
+            },
+            {
+                id: 'pork-rice', name: '豬腳飯', source: '《手路菜》',
+                culture: '琥珀光澤的誘惑：慢火細熬，讓膠質化入滷汁，每一口都是心意。',
+                steps: [{ id: 'stir', name: '文火攪拌', instruction: '🌀 順時針轉圈滑動均勻上色', interactionType: 'circle', target: 20, onom: '咕嘟', visual: '🥘' }],
+                photoUrl: 'uploaded:Gemini_Generated_Image_50yg7c50yg7c50yg.jpg'
+            },
+            {
+                id: 'grass-jelly', name: '仙草凍', source: '《友繪的小梅屋記事簿》',
+                culture: '黑色寶石：傳統工法熬煮出的消暑聖品，切塊淋上鮮奶油後呈現絕佳口感。',
+                steps: [
+                    { id: 'slice', name: '劃切方塊', instruction: '⚔️ 快速劃出橫豎網格！', interactionType: 'slash', target: 16, onom: '刷！', visual: '⬛' },
+                    { id: 'pour', name: '澆淋糖乳', instruction: '🥛 按住畫面注入鮮奶油', interactionType: 'hold-timer', target: 10, onom: '滑...', visual: '🥛' }
+                ],
+                photoUrl: 'uploaded:Gemini_Generated_Image_kceldkceldkceldk.jpg'
+            },
+            {
+                id: 'meat-ball', name: '貢丸', source: '《台灣特有種》',
+                culture: '彈牙的祕密：新竹名產，透過鐵棍不斷搥打肉塊化為肉漿，每一口都是勁道。',
+                steps: [{ id: 'beat', name: '鐵棍搥打', instruction: '🔨 快速上下劃動搥打肉塊！', interactionType: 'slash', target: 25, onom: '砰！', visual: '🥩' }],
+                photoUrl: 'uploaded:Gemini_Generated_Image_kj451bkj451bkj45.jpg'
+            },
+            {
+                id: 'oolong-tea', name: '烏龍茶', source: '《異人茶跡》',
+                culture: '福爾摩沙的芬芳：高沖注入沸水喚醒茶香，這是台灣走向世界的起點。',
+                steps: [{ id: 'pour', name: '高沖注入', instruction: '🍵 按住畫面注入沸水', interactionType: 'hold-timer', target: 12, onom: '呼嚕嚕', visual: '🍵' }],
+                photoUrl: 'uploaded:Gemini_Generated_Image_svxiu6svxiu6svxi.jpg'
+            },
+            {
+                id: 'fried-vermicelli', name: '炒米粉', source: '《手路菜》',
+                culture: '節慶的滋味：大火翻炒出的台灣靈魂，米粉吸收了肉燥的濃郁精華。',
+                steps: [{ id: 'stir', name: '大火翻炒', instruction: '🥘 快速左右滑動受熱！', interactionType: 'shake', target: 25, onom: '滋—！', visual: '🥘' }],
+                photoUrl: 'uploaded:Gemini_Generated_Image_pob5jcpob5jcpob5.jpg'
+            },
+            {
+                id: 'tea-egg', name: '茶葉蛋', source: '《幸福調味料》',
+                culture: '碎裂的美學：蛋殼裂痕越多越入味。這是屬於巷弄與時光的平凡美味。',
+                steps: [{ id: 'crack', name: '輕敲蛋殼', instruction: '🥚 點擊雞蛋不同位置使其龜裂', interactionType: 'crack-egg', target: 12, onom: '啪！', visual: '🥚' }],
+                photoUrl: 'uploaded:Gemini_Generated_Image_a2wpfa2wpfa2wpfa.jpg'
+            },
+            {
+                id: 'soy-sauce', name: '古法醬油', source: '《異人茶跡》',
+                culture: '時間的沉澱：黑豆發酵後壓榨出的原汁。每一滴都是大地的恩賜。',
+                steps: [{ id: 'press', name: '重石壓榨', instruction: '🗿 快速向下猛拉游標！', interactionType: 'slider-snap', target: 12, onom: '滴噠', visual: '🗿' }],
+                photoUrl: 'uploaded:Gemini_Generated_Image_adbrmvadbrmvadbr.jpg'
+            }
+        ];
+
+        let state = {
+            activeFood: null,
+            currentStepIdx: 0,
+            stepProgress: 0,
+            unlockedIds: [],
+            isHolding: false,
+            lastPos: null,
+            gameInterval: null
+        };
+
+        function init() { renderShelf(); }
+
+        function changeScene(scene) {
+            document.querySelectorAll('#game-container > div').forEach(div => div.classList.add('hidden'));
+            document.getElementById(`scene-${scene}`).classList.remove('hidden');
+            if (scene === 'kitchen') startGameLoop();
+            else {
+                stopGameLoop();
+                document.getElementById('smoke-container').innerHTML = '';
+            }
+        }
+
+        function renderShelf() {
+            const list = document.getElementById('food-list');
+            list.innerHTML = '';
+            FOOD_DATABASE.forEach(food => {
+                const isUnlocked = state.unlockedIds.includes(food.id);
+                const item = document.createElement('div');
+                item.className = `h-40 border-4 border-black relative cursor-pointer hover:-translate-y-1 transition-all ${isUnlocked ? 'bg-[#B22222]' : 'bg-stone-900 shadow-xl'}`;
+                item.onclick = () => startCooking(food);
+                item.innerHTML = `
+                    <div class="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
+                        <span class="text-white text-3xl font-black italic">${food.name}</span>
+                        <span class="text-white/30 text-[10px] uppercase tracking-widest mt-2">${food.source}</span>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        function startCooking(food) {
+            state.activeFood = food;
+            state.currentStepIdx = 0;
+            state.stepProgress = 0;
+            document.getElementById('result-overlay').classList.add('hidden');
+            document.getElementById('result-card').className = 'relative z-[210] bg-white border-[8px] border-black p-4 max-w-sm w-full comic-shadow opacity-0';
+            loadStep();
+            changeScene('kitchen');
+        }
+
+        function loadStep() {
+            const step = state.activeFood.steps[state.currentStepIdx];
+            document.getElementById('kitchen-step-count').innerText = `STEP ${state.currentStepIdx + 1}`;
+            document.getElementById('kitchen-step-name').innerText = step.name;
+            document.getElementById('step-instruction').innerText = step.instruction;
+            document.getElementById('step-progress-fill').style.width = '0%';
+            
+            const visual = document.getElementById('step-visual-content');
+            visual.innerHTML = '';
+            
+            if (step.interactionType === 'slash') {
+                visual.innerHTML = `<div id="target-icon" class="text-9xl mb-4 transition-transform select-none">${step.visual}</div>`;
+            } else if (step.interactionType === 'circle') {
+                visual.innerHTML = `<div class="w-64 h-64 rounded-full border-[10px] border-black bg-stone-100 flex items-center justify-center overflow-hidden relative"><div class="text-6xl z-0 opacity-20">${step.visual}</div><div id="spoon-handle" class="absolute w-40 h-4 bg-yellow-700 border-2 border-black origin-left z-10"></div></div>`;
+            } else if (step.interactionType === 'crack-egg') {
+                visual.innerHTML = `<div id="visual-target" class="w-64 h-64 bg-stone-100 border-4 border-black rounded-full flex items-center justify-center relative overflow-hidden"><span class="text-7xl opacity-40 select-none">🥚</span><div id="click-marks" class="absolute inset-0 pointer-events-none"></div></div>`;
+            } else if (step.interactionType === 'hold-timer') {
+                visual.innerHTML = `<div class="text-[120px] animate-pulse select-none">${step.visual}</div>`;
+            } else if (step.interactionType === 'shake') {
+                visual.innerHTML = `<div id="visual-pan" class="text-[120px] select-none">${step.visual}</div>`;
+            } else if (step.interactionType === 'slider-snap') {
+                visual.innerHTML = `<div class="flex flex-col items-center gap-6"><div class="text-6xl">${step.visual}</div><div class="w-32 h-48 border-4 border-black bg-white relative overflow-hidden"><div id="press-fill" class="absolute bottom-0 left-0 right-0 bg-stone-800 transition-all"></div><input type="range" id="snap-slider" min="0" max="100" value="0" class="absolute inset-0 opacity-0 cursor-pointer"></div><p class="font-bold text-stone-400">↓↓ 向下拉壓 ↓↓</p></div>`;
+                document.getElementById('snap-slider')?.addEventListener('input', (e) => {
+                    const val = e.target.value;
+                    document.getElementById('press-fill').style.height = val + '%';
+                    if(val > 90) {
+                        updateProgress(2);
+                        e.target.value = 0;
+                        document.getElementById('press-fill').style.height = '0%';
+                        spawnOnom('滴！', window.innerWidth/2, window.innerHeight/2);
+                    }
+                });
+            }
+        }
+
+        function triggerSmokeEffect() {
+            const container = document.getElementById('smoke-container');
+            for(let i=0; i<40; i++) {
+                setTimeout(() => {
+                    const particle = document.createElement('div');
+                    particle.className = 'smoke-particle';
+                    const size = Math.random() * 80 + 40;
+                    particle.style.width = `${size}px`;
+                    particle.style.height = `${size}px`;
+                    particle.style.left = `${Math.random() * 100}%`;
+                    particle.style.bottom = `-50px`;
+                    particle.style.animation = `smoke-float ${Math.random() * 2 + 1.5}s ease-out forwards`;
+                    container.appendChild(particle);
+                    setTimeout(() => particle.remove(), 3500);
+                }, i * 40);
+            }
+        }
+
+        function finishCooking() {
+            stopGameLoop();
+            if (!state.unlockedIds.includes(state.activeFood.id)) state.unlockedIds.push(state.activeFood.id);
+            triggerSmokeEffect();
+            
+            setTimeout(() => {
+                document.getElementById('result-overlay').classList.remove('hidden');
+                document.getElementById('result-img').src = state.activeFood.photoUrl;
+                document.getElementById('result-title').innerText = state.activeFood.name;
+                document.getElementById('result-source').innerText = `原作來源：${state.activeFood.source}`;
+                document.getElementById('result-culture').innerText = state.activeFood.culture;
+                
+                const linkBtn = document.getElementById('comic-link');
+                const url = COMIC_LINKS[state.activeFood.source];
+                if(url) {
+                    linkBtn.href = url;
+                    linkBtn.innerText = '📖 閱讀漫畫原作';
+                    linkBtn.classList.remove('opacity-50', 'pointer-events-none');
+                } else {
+                    linkBtn.href = "#";
+                    linkBtn.innerText = '🔒 實體書限定收錄';
+                    linkBtn.classList.add('opacity-50', 'pointer-events-none');
+                }
+
+                const card = document.getElementById('result-card');
+                card.classList.add('animate-card-pop');
+                renderShelf();
+            }, 800);
+        }
+
+        function updateProgress(amt) {
+            const step = state.activeFood.steps[state.currentStepIdx];
+            state.stepProgress += amt;
+            
+            // 視覺回饋
+            const targetIcon = document.getElementById('target-icon');
+            if(targetIcon) targetIcon.style.transform = `scale(${1 + (Math.random()*0.1)}) rotate(${Math.random()*10-5}deg)`;
+
+            if (state.stepProgress >= step.target) {
+                if (state.currentStepIdx < state.activeFood.steps.length - 1) {
+                    state.currentStepIdx++;
+                    state.stepProgress = 0;
+                    loadStep();
+                } else {
+                    finishCooking();
+                }
+            }
+            document.getElementById('step-progress-fill').style.width = `${(state.stepProgress/step.target)*100}%`;
+        }
+
+        function startGameLoop() {
+            state.gameInterval = setInterval(() => {
+                const step = state.activeFood?.steps[state.currentStepIdx];
+                if (step?.interactionType === 'hold-timer' && state.isHolding) {
+                    updateProgress(0.5);
+                }
+            }, 100);
+        }
+
+        function stopGameLoop() { clearInterval(state.gameInterval); }
+
+        const kitchen = document.getElementById('scene-kitchen');
+        kitchen.addEventListener('pointerdown', (e) => {
+            const step = state.activeFood?.steps[state.currentStepIdx];
+            if(step?.interactionType === 'crack-egg') {
+                updateProgress(1);
+                spawnOnom(step.onom, e.clientX, e.clientY);
+                const m = document.createElement('div');
+                m.className = 'absolute border-t-2 border-black/40 rotate-45';
+                m.style.width = '30px'; 
+                m.style.left = `${(e.offsetX / e.target.clientWidth) * 100}%`; 
+                m.style.top = `${(e.offsetY / e.target.clientHeight) * 100}%`;
+                document.getElementById('click-marks')?.appendChild(m);
+            }
+            state.isHolding = true;
+        });
+        window.addEventListener('pointerup', () => state.isHolding = false);
+        kitchen.addEventListener('pointermove', (e) => {
+            const step = state.activeFood?.steps[state.currentStepIdx];
+            if (!step) return;
+            if (['slash', 'shake'].includes(step.interactionType)) {
+                if (state.lastPos && Math.abs(e.clientX - state.lastPos.x) > 40) {
+                    updateProgress(1);
+                    spawnOnom(step.onom, e.clientX, e.clientY);
+                }
+                state.lastPos = { x: e.clientX, y: e.clientY };
+            }
+            if (step.interactionType === 'circle' && state.isHolding) {
+                updateProgress(0.4);
+                if(Math.random() > 0.8) spawnOnom(step.onom, e.clientX, e.clientY);
+                const handle = document.getElementById('spoon-handle');
+                if(handle) {
+                    const rect = handle.parentElement.getBoundingClientRect();
+                    const angle = Math.atan2(e.clientY - (rect.top + rect.height/2), e.clientX - (rect.left + rect.width/2));
+                    handle.style.transform = `rotate(${angle}rad)`;
+                }
+            }
+        });
+
+        function spawnOnom(text, x, y) {
+            const el = document.createElement('div');
+            el.className = 'onomatopoeia';
+            el.innerText = text;
+            el.style.left = `${x}px`; el.style.top = `${y}px`;
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 600);
+        }
+
+        init();
+    </script>
+</body>
+</html>
