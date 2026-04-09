@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>臺漫灶腳 - 互動敘事遊戲</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #F5F2E9;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .vertical-rl {
+            writing-mode: vertical-rl;
+        }
+
+        @keyframes steam {
+            0% { transform: scale(0.5) translateY(0) rotate(0); opacity: 0; }
+            20% { opacity: 1; }
+            100% { transform: scale(4) translateY(-800px) rotate(90deg); opacity: 0; }
+        }
+
+        .animate-steam {
+            animation: steam linear infinite;
+        }
+
+        @keyframes ping-once {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
+
+        .animate-ping-once {
+            animation: ping-once 0.7s ease-out forwards;
+        }
+
+        .comic-shadow {
+            box-shadow: 10px 10px 0px 0px black;
+        }
+
+        .comic-shadow-large {
+            box-shadow: 30px 30px 0px 0px black;
+        }
+
+        .shelf-bg {
+            background-color: #3E2723;
+            background-image: linear-gradient(rgba(0,0,0,0.2) 1px, transparent 1px);
+            background-size: 100% 40px;
+        }
+
+        .dot-grid {
+            background-image: radial-gradient(#d1d5db 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script>
+        // 12 道料理資料庫，新增漫畫連結 (comicUrl)
+        const FOOD_DATABASE = [
+            { 
+                id: 'pork-rice', 
+                name: '豬腳飯', 
+                source: '《手路菜》', 
+                culture: '燉煮的藝術，慢火細熬出琥珀色膠質，代表著長輩最深層的疼惜。',
+                interactionType: 'circle', 
+                targetCount: 25,
+                instruction: '順時針攪拌滷汁，讓豬腳均勻上色',
+                onom: '咕嘟...',
+                photoUrl: 'uploaded:Gemini_Generated_Image_50yg7c50yg7c50yg.jpg',
+                photoLabel: '極致動漫風：琥珀光澤滷豬腳',
+                comicUrl: 'https://www.creative-comic.tw/zh/book/300/content'
+            },
+            { 
+                id: 'tea-egg', 
+                name: '茶葉蛋', 
+                source: '《幸福調味料》', 
+                culture: '便利商店與家庭共同的回憶，碎裂的殼是入味的關鍵，也是平凡的幸福。',
+                interactionType: 'hold', 
+                targetCount: 100, 
+                instruction: '長按游標蓄力，一次敲碎蛋殼！',
+                onom: '啪嚓！',
+                photoUrl: 'uploaded:Gemini_Generated_Image_a2wpfa2wpfa2wpfa.jpg', 
+                photoLabel: '極致動漫風：茶香大理石紋蛋',
+                comicUrl: 'https://www.creative-comic.tw/zh/book/130/content'
+            },
+            { 
+                id: 'soy-sauce', 
+                name: '醬油', 
+                source: '《手路菜》', 
+                culture: '台式料理的基底，發酵的時間味覺，一滴入魂的陳年甘醇。',
+                interactionType: 'hold', 
+                targetCount: 100,
+                instruction: '長按密封甕口，靜待時間發酵...',
+                onom: '沈澱...',
+                photoUrl: 'uploaded:Gemini_Generated_Image_adbrmvadbrmvadbr.jpg', 
+                photoLabel: '極致動漫風：陳年古法釀造醬油',
+                comicUrl: 'https://www.creative-comic.tw/zh/book/300/content'
+            },
+            { 
+                id: 'meatball', 
+                name: '貢丸', 
+                source: '《台灣特有種》', 
+                culture: '彈牙的祕密在於極速捶打，是新竹風城最著名的手作印記。',
+                interactionType: 'draw', 
+                targetCount: 20,
+                instruction: '快速來回捶打肉漿，使其產生Ｑ彈感！',
+                onom: '磅！',
+                photoUrl: 'uploaded:Gemini_Generated_Image_kj451bkj451bkj45.jpg', 
+                photoLabel: '極致動漫風：Ｑ彈手作貢丸',
+                comicUrl: 'https://www.creative-comic.tw/zh/book/137/content'
+            },
+            { 
+                id: 'shui-ban', 
+                name: '水粄', 
+                source: '《手路菜》', 
+                culture: '客家庄的傳統美味，米漿凝結後的溫潤質感，配上鹹香菜脯。',
+                interactionType: 'circle', 
+                targetCount: 20,
+                instruction: '旋轉磨石磨製純淨米漿',
+                onom: '磨—',
+                photoUrl: 'uploaded:018a179e7373d986.jpg', 
+                photoLabel: '極致動漫風：客家傳統純米水粄',
+                comicUrl: 'https://www.creative-comic.tw/zh/book/300/content'
+            },
+            { 
+                id: 'oolong-tea', 
+                name: '烏龍茶', 
+                source: '《異人茶跡》', 
+                culture: '台灣茶歷史的縮影，讓福爾摩沙的芬芳走向世界。',
+                interactionType: 'hold', 
+                targetCount: 100,
+                instruction: '注入熱水，靜待茶葉緩緩展開。',
+                onom: '沁香...',
+                photoUrl: 'uploaded:Gemini_Generated_Image_svxiu6svxiu6svxi.jpg', 
+                photoLabel: '極致動漫風：金黃透亮烏龍茶',
+                comicUrl: 'https://www.creative-comic.tw/zh/book/161/content'
+            },
+            { 
+                id: 'fruit-cake', 
+                name: '英式水果蛋糕', 
+                source: '《異人茶跡》', 
+                culture: '洋行文化帶來的異國風情，與本土茶香交織的時光滋味。',
+                interactionType: 'drag', 
+                targetCount: 1,
+                instruction: '將糖漬水果撒入麵糊中',
+                onom: '撒！',
+                photoUrl: 'uploaded:20180904181907-ef855213afbd64c9b599db5d580a9b97-w1600.webP', 
+                photoLabel: '極致動漫風：經典英式水果蛋糕',
+                comicUrl: 'https://www.creative-comic.tw/zh/book/161/content'
+            },
+            { 
+                id: 'aiyu', 
+                name: '愛玉', 
+                source: '《友繪的小梅屋記事簿》', 
+                culture: '世界唯一的台灣特有種，揉搓種子產生的天然凝膠，透亮消暑。',
+                interactionType: 'circle', 
+                targetCount: 30,
+                instruction: '按住順時針畫圈，揉搓愛玉種子',
+                onom: '滑順',
+                photoUrl: 'uploaded:Gemini_Generated_Image_dbtvo1dbtvo1dbtv.jpg', 
+                photoLabel: '極致動漫風：透亮天然愛玉凍',
+                comicUrl: 'https://www.creative-comic.tw/zh/book/129/content'
+            },
+            { 
+                id: 'wagashi', 
+                name: '和菓子', 
+                source: '《友繪的小梅屋記事簿》', 
+                culture: '日治時期的精緻甜點，季節感的具現，指尖上的藝術。',
+                interactionType: 'draw', 
+                targetCount: 15,
+                instruction: '勾勒出櫻花瓣的細緻紋路',
+                onom: '雅...',
+                photoUrl: 'uploaded:Gemini_Generated_Image_adbrmvadbrmvadbr.jpg', 
+                photoLabel: '極致動漫風：四季之美和菓子',
+                comicUrl: 'https://www.creative-comic.tw/zh/book/129/content'
+            },
+            { 
+                id: 'grass-jelly', 
+                name: '仙草', 
+                source: '《友繪的小梅屋記事簿》', 
+                culture: '黑色的寶石，溫潤清熱。慢火熬煮出的甘甜，是夏日的救贖。',
+                interactionType: 'hold', 
+                targetCount: 100,
+                instruction: '長按慢火熬煮仙草乾',
+                onom: '咕嘟',
+                photoUrl: 'uploaded:Gemini_Generated_Image_kceldkceldkceldk.jpg', 
+                photoLabel: '極致動漫風：溫潤滑順仙草凍',
+                comicUrl: 'https://www.creative-comic.tw/zh/book/129/content'
+            },
+            { 
+                id: 'melon-pork', 
+                name: '瓜仔肉', 
+                source: '《手路菜》', 
+                culture: '台式家常的靈魂，考驗醬瓜與肉末比例的平衡。',
+                interactionType: 'draw', 
+                targetCount: 15,
+                instruction: '在醬瓜上來回劃線剁碎！',
+                onom: '叩！',
+                photoUrl: 'uploaded:ee97726bc1471757.webp', 
+                photoLabel: '極致動漫風：家傳秘製瓜仔肉',
+                comicUrl: 'https://www.creative-comic.tw/zh/book/300/content'
+            },
+            { 
+                id: 'fried-vermicelli', 
+                name: '炒米粉', 
+                source: '《手路菜》', 
+                culture: '米粉吸收了肉燥精華，是台灣宴客最熱情的招待。',
+                interactionType: 'drag', 
+                targetCount: 1,
+                instruction: '將米粉投入鍋中大火翻炒',
+                onom: '滋啦！',
+                photoUrl: 'uploaded:Gemini_Generated_Image_pob5jcpob5jcpob5.jpg', 
+                photoLabel: '極致動漫風：噴香台式炒米粉',
+                comicUrl: 'https://www.creative-comic.tw/zh/book/300/content'
+            }
+        ];
+
+        // 應用程式狀態管理
+        let state = {
+            scene: 'intro', 
+            activeFood: null,
+            unlockedIds: JSON.parse(localStorage.getItem('unlocked_foods') || '[]'),
+            progress: 0,
+            isFinished: false,
+            showPhoto: false,
+            isHolding: false,
+            isDragging: false,
+            dragPos: { x: 0, y: 0 },
+            lastPos: null,
+            holdInterval: null
+        };
+
+        function setState(newState) {
+            state = { ...state, ...newState };
+            if (newState.unlockedIds) {
+                localStorage.setItem('unlocked_foods', JSON.stringify(state.unlockedIds));
+            }
+            render();
+        }
+
+        // 核心渲染
+        function render() {
+            const app = document.getElementById('app');
+            if (state.scene === 'intro') app.innerHTML = renderIntro();
+            else if (state.scene === 'shelf') app.innerHTML = renderShelf();
+            else if (state.scene === 'kitchen') app.innerHTML = renderKitchen();
+        }
+
+        function renderIntro() {
+            return `
+                <div class="min-h-screen flex flex-col items-center justify-center space-y-12 p-6">
+                    <div class="border-[12px] border-black p-12 bg-white comic-shadow text-center animate__animated animate__zoomIn relative">
+                        <div class="absolute -top-8 -left-8 w-20 h-20 bg-red-600 border-8 border-black rounded-full animate-pulse"></div>
+                        <h1 class="text-7xl font-black italic mb-2 tracking-tighter">臺漫灶腳</h1>
+                        <p class="text-xl font-black tracking-[0.5em] text-gray-400 uppercase">Taiwanese Comic Kitchen</p>
+                    </div>
+                    <button onclick="setState({scene: 'shelf'})" class="border-8 border-black px-16 py-6 bg-[#B22222] text-white text-3xl font-black hover:scale-105 transition-all shadow-[10px_10px_0px_0px_black] active:translate-y-1 active:shadow-none">
+                        開啟記憶廚房
+                    </button>
+                </div>
+            `;
+        }
+
+        function renderShelf() {
+            return `
+                <div class="min-h-screen shelf-bg p-8 overflow-y-auto">
+                    <div class="max-w-7xl mx-auto pb-24">
+                        <div class="flex justify-between items-end mb-12 border-b-8 border-black pb-4">
+                            <h2 class="text-white text-6xl font-black italic tracking-tighter">記憶書櫃 <span class="text-2xl not-italic opacity-50 ml-4">${state.unlockedIds.length} / ${FOOD_DATABASE.length}</span></h2>
+                            <button onclick="setState({scene: 'intro'})" class="bg-white border-4 border-black px-6 py-2 font-black comic-shadow hover:bg-gray-100 transition-colors">返回</button>
+                        </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                            ${FOOD_DATABASE.map(food => `
+                                <div onclick="startCooking('${food.id}')" class="relative h-64 border-x-4 border-t-4 border-black transition-all cursor-pointer group hover:-translate-y-2 ${state.unlockedIds.includes(food.id) ? 'bg-[#B22222]' : 'bg-stone-800 grayscale opacity-80'}">
+                                    <div class="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
+                                        <span class="text-white font-black text-2xl vertical-rl tracking-[0.3em]">${food.name}</span>
+                                        <span class="text-white/30 text-[9px] mt-4 font-black uppercase truncate w-full">${food.source}</span>
+                                    </div>
+                                    ${state.unlockedIds.includes(food.id) ? '<div class="absolute -top-3 -right-3 bg-yellow-400 border-4 border-black p-1 rounded-full z-20">✅</div>' : ''}
+                                    <div class="absolute bottom-0 left-0 right-0 h-4 bg-black/40"></div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderKitchen() {
+            const food = state.activeFood;
+            const progressPct = (state.progress / food.targetCount) * 100;
+            
+            return `
+                <div class="h-screen bg-[#F5F2E9] flex flex-col overflow-hidden relative dot-grid" 
+                     onmousemove="handleMouseMove(event)" 
+                     onmouseup="handleMouseUp()"
+                     onmouseleave="handleMouseUp()">
+                    
+                    <div class="bg-black text-white p-4 flex justify-between items-center z-[110] border-b-4 border-gray-800">
+                        <button onclick="setState({scene: 'shelf'})" class="font-bold hover:text-red-400">← 返回書架</button>
+                        <div class="text-2xl font-black italic">${food.name}</div>
+                        <div class="w-32 bg-stone-700 h-3 border border-white">
+                            <div class="bg-red-500 h-full transition-all duration-200" style="width: ${progressPct}%"></div>
+                        </div>
+                    </div>
+
+                    <div id="onom-container" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
+
+                    <div class="flex-1 relative flex items-center justify-center">
+                        <div class="relative w-[500px] h-[500px] flex items-center justify-center">
+                            <div class="absolute inset-0 bg-white/90 border-8 border-black rounded-3xl comic-shadow"></div>
+                            
+                            <div class="z-10 flex flex-col items-center">
+                                ${food.interactionType === 'drag' ? `
+                                    <div class="flex flex-col items-center">
+                                        <div class="w-48 h-48 border-8 border-dashed border-black/10 rounded-full flex items-center justify-center">
+                                            <span class="font-black text-stone-300">置入目標</span>
+                                        </div>
+                                        ${!state.isFinished ? `
+                                            <div id="drag-item" onmousedown="state.isDragging = true" 
+                                                 class="mt-8 w-20 h-20 bg-orange-600 border-4 border-black cursor-grab active:cursor-grabbing flex items-center justify-center text-white text-4xl comic-shadow"
+                                                 style="${state.isDragging ? `position: fixed; left: ${state.dragPos.x - 40}px; top: ${state.dragPos.y - 40}px; z-index: 100;` : ''}">
+                                                🍳
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                ` : ''}
+
+                                ${food.interactionType === 'hold' ? `
+                                    <div onmousedown="state.isHolding = true; startHoldTimer()" 
+                                         class="w-48 h-48 bg-white border-8 border-black rounded-full flex flex-col items-center justify-center cursor-pointer active:scale-95 transition-all comic-shadow">
+                                        <div class="text-5xl mb-2 animate-bounce">🔥</div>
+                                        <div class="font-black">長按蓄力</div>
+                                    </div>
+                                ` : ''}
+
+                                ${(food.interactionType === 'draw' || food.interactionType === 'circle') ? `
+                                    <div class="w-64 h-64 bg-white border-8 border-black rounded-full flex items-center justify-center overflow-hidden comic-shadow" onmousedown="state.isDrawing = true">
+                                        <div class="w-32 h-32 bg-orange-50 border-4 border-black rounded-xl transition-transform ${state.progress % 2 === 0 ? 'rotate-6 scale-105' : '-rotate-6 scale-95'}">
+                                           <div class="w-full h-1/2 flex items-center justify-center text-3xl">
+                                              ${food.interactionType === 'circle' ? '🌀' : '🔪'}
+                                           </div>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+
+                        <div class="absolute bottom-8 bg-white border-4 border-black p-4 text-2xl font-black italic comic-shadow animate__animated animate__slideInUp">
+                            ${food.instruction}
+                        </div>
+                    </div>
+
+                    ${state.isFinished ? `
+                        <div class="absolute inset-0 z-[200] flex items-center justify-center p-6">
+                            <div class="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
+                            <div class="relative z-10 transition-all duration-700 transform ${state.showPhoto ? 'scale-100 opacity-100' : 'scale-50 opacity-0'}">
+                                <div class="bg-white border-[8px] border-black p-3 comic-shadow-large max-w-xl w-full">
+                                    <div class="aspect-video bg-stone-200 border-4 border-black relative overflow-hidden">
+                                        <img src="${food.photoUrl}" alt="${food.name}" class="w-full h-full object-cover">
+                                        <div class="absolute bottom-2 right-2 bg-black/70 text-white text-[10px] px-2 py-1 rounded">
+                                            ${food.photoLabel}
+                                        </div>
+                                    </div>
+                                    <div class="mt-6 space-y-4">
+                                        <div class="flex justify-between items-end border-b-4 border-black pb-2">
+                                            <h3 class="text-4xl font-black italic">${food.name}</h3>
+                                            <span class="text-sm font-bold text-stone-400">${food.source}</span>
+                                        </div>
+                                        <p class="text-lg font-bold text-stone-700 leading-snug">${food.culture}</p>
+                                        <div class="flex gap-3 pt-2">
+                                            <button onclick="setState({scene: 'shelf'})" class="flex-1 bg-stone-100 border-4 border-black py-3 font-black hover:bg-black hover:text-white transition-all">返回書架</button>
+                                            <a href="${food.comicUrl}" target="_blank" class="flex-1 bg-[#B22222] text-white border-4 border-black py-3 font-black text-center hover:bg-red-700 transition-all comic-shadow active:translate-y-1 active:shadow-none">閱讀作品</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        // 互動邏輯 (保持原樣)
+        function startCooking(id) {
+            const food = FOOD_DATABASE.find(f => f.id === id);
+            setState({
+                scene: 'kitchen',
+                activeFood: food,
+                progress: 0,
+                isFinished: false,
+                showPhoto: false,
+                isHolding: false,
+                isDragging: false
+            });
+        }
+
+        function handleMouseMove(e) {
+            if (state.isFinished || !state.activeFood) return;
+            const x = e.clientX;
+            const y = e.clientY;
+
+            if (state.isDragging) {
+                state.dragPos = { x, y };
+                const rect = document.querySelector('.w-48.border-dashed').getBoundingClientRect();
+                if (x > rect.left && x < rect.right && y > rect.top && y < rect.bottom) {
+                    finishCooking();
+                }
+                render();
+            }
+
+            if (state.isDrawing || (state.activeFood.interactionType === 'draw' && e.buttons === 1)) {
+                if (state.lastPos) {
+                    const dist = Math.sqrt(Math.pow(x - state.lastPos.x, 2) + Math.pow(y - state.lastPos.y, 2));
+                    if (dist > 40) {
+                        updateProgress(1);
+                        triggerOnom(state.activeFood.onom, x, y);
+                        state.lastPos = { x, y };
+                    }
+                } else state.lastPos = { x, y };
+            }
+        }
+
+        function handleMouseUp() {
+            state.isHolding = false;
+            state.isDragging = false;
+            state.isDrawing = false;
+            state.lastPos = null;
+            if (state.holdInterval) clearInterval(state.holdInterval);
+            render();
+        }
+
+        function startHoldTimer() {
+            if (state.holdInterval) clearInterval(state.holdInterval);
+            state.holdInterval = setInterval(() => {
+                if (state.isHolding && !state.isFinished) {
+                    updateProgress(2);
+                } else clearInterval(state.holdInterval);
+            }, 50);
+        }
+
+        function updateProgress(inc) {
+            const newProgress = state.progress + inc;
+            if (newProgress >= state.activeFood.targetCount) {
+                finishCooking();
+            } else {
+                state.progress = newProgress;
+                render();
+            }
+        }
+
+        function triggerOnom(word, x, y) {
+            const container = document.getElementById('onom-container');
+            if (!container) return;
+            const div = document.createElement('div');
+            div.className = 'absolute pointer-events-none z-[60] animate-ping-once text-3xl font-black italic text-white';
+            div.style.left = `${x}px`;
+            div.style.top = `${y}px`;
+            div.style.webkitTextStroke = '1.5px black';
+            div.innerText = word;
+            container.appendChild(div);
+            setTimeout(() => div.remove(), 700);
+        }
+
+        function finishCooking() {
+            if (state.isFinished) return;
+            state.isFinished = true;
+            state.progress = state.activeFood.targetCount;
+            if (!state.unlockedIds.includes(state.activeFood.id)) {
+                setState({ unlockedIds: [...state.unlockedIds, state.activeFood.id] });
+            }
+            render();
+            setTimeout(() => {
+                state.showPhoto = true;
+                render();
+            }, 800);
+        }
+
+        render();
+    </script>
+</body>
+</html>
